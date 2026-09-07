@@ -130,3 +130,15 @@
 - **Focus Areas:** Compilers & Language Design, Code Generation, Target Architecture (basic).
 - **Description:** Extend your interpreter project. Take your simple language and compile it down to a basic intermediate representation (like bytecode) or even simple assembly (e.g., x86-64).
 - **Language:** `C`
+
+### Reactive Web UI Runtime
+
+- **Description:** Build a minimal reactive UI library and framework from scratch. Implement signals (or proxies), computed/derived values, effects, and automatic dependency tracking so only affected parts of the UI update. Support component composition (components as functions), basic conditional/list rendering, and incremental DOM updates. Start with a state-driven real DOM renderer, with the option to add a virtual DOM and reconciliation layer.
+- **Focus Areas:** Reactivity systems (signals, dependency tracking, dependency graphs, push vs pull), Rendering (frontend fundamentals, DOM APIs, virtual DOM reconciliation, fine-grained/incremental updates), State management, Component architecture, Event handling, Scheduling, and Browser rendering pipeline interactions.
+- **Language:** `TypeScript` or `JavaScript`
+
+### Terminal UI Runtime
+
+- **Description:** Build a small declarative terminal UI framework. Represent the UI as a tree of components with a layout system (such as flex or a basic box model), and maintain reactive application state so the UI updates when data changes. Implement an event loop to process keyboard and mouse input, reconcile UI changes, and efficiently draw to the terminal using ANSI escape sequences or a library like `termion`/`crossterm`.
+- **Focus Areas:** TUI architecture, Rendering (immediate-mode vs retained-mode, layout algorithms, efficient redrawing, incremental rendering), Reactivity and state management, Event loops and handling, Component trees, Reconciliation, and Terminal control (ANSI, raw mode, I/O).
+- **Language:** `Rust` or `Go`
