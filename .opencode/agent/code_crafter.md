@@ -2,11 +2,9 @@
 description: Plans CodeCrafters-style roadmaps. 
 mode: primary
 permission:
-  write:
-    "**/roadmap.md": allow
   edit:
-    "**/roadmap.md": allow
     "*": ask
+    "**/roadmap.md": allow
   bash: ask
   webfetch: allow
   websearch: allow
