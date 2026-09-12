@@ -20,6 +20,8 @@
             mdbook
             just-lsp
             uv
+            ruff
+            pyright
           ];
 
           shellHook = ''
