@@ -1,0 +1,5 @@
+/* Sidebar "on this page": keep only the page's h2 headings,
+   hide nested h3+ entries (the per-stage subsections). */
+#mdbook-sidebar .on-this-page ol ol {
+  display: none;
+}

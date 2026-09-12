@@ -6,14 +6,27 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **Focus areas:** OS I/O multiplexing (`select`/`poll`/`epoll`/`kqueue`, file descriptors), non-blocking I/O, event-driven concurrency, cooperative multitasking, how `async/await` works under the hood
 - **Build/test command:** `uv add --dev pytest` (Stage 0), then `uv run pytest tests/` and `uv run main.py`
 
-## Milestone checkpoints
+## Milestones
 
-1. **Callback loop** — a runnable scheduler with `call_soon` / `call_later` (timers).
-2. **I/O reactor** — readiness-based dispatch over file descriptors via `selectors`.
-3. **Cooperative multitasking** — generators, `yield from`, Futures, Tasks.
-4. **async/await executor** — native coroutines + `__await__` interop, `create_task`, `gather`.
-5. **Beast mode** — non-blocking TCP echo server on your loop; cancellation, exception propagation, asyncio parity.
+1. **Callback loop** (Stages 0–2) — a runnable scheduler with `call_soon` / `call_later` (timers).
+2. **I/O reactor** (Stages 3–4) — readiness-based dispatch over file descriptors via `selectors`.
+3. **Cooperative multitasking** (Stages 5–7) — generators, `yield from`, Futures, Tasks.
+4. **async/await executor** (Stages 8–9) — native coroutines + `__await__` interop, `create_task`, `gather`.
+5. **Beast mode** (Stages 10–13) — non-blocking TCP echo server on your loop; cancellation, exception propagation, asyncio parity.
 
+## Similar Projects & Libraries
+
+Real implementations that solve the same problem; read their source for inspiration, don't copy it. Prefer the readable entry points listed here.
+
+- [CPython `asyncio`](https://github.com/python/cpython/tree/main/Lib/asyncio) (Python) — the canonical reference. Study `base_events.py` (`_run_once`, `_compute_timeout`, `call_soon`/`call_later`), `selector_events.py` (`_sock_recv`/`_sock_sendall`/`_accept_connection`), `futures.py` (`Future`, `__await__`), and `tasks.py` (`Task.__step`, `cancel`, `gather`). Stages 1–13 mirror these files one by one.
+- [uvloop](https://github.com/MagicStack/uvloop) (Cython/C) — a drop-in asyncio event-loop implementation built on libuv. Study how it maps `add_reader`/`add_writer`/timers onto libuv handles in `uvloop/loop.pyx`, and what real-world performance optimizations exist beyond the toy loop.
+- [libuv](https://github.com/libuv/libuv) (C) — the cross-platform event loop behind Node.js. Study `src/unix/core.c` (`uv_run`, the `run_once`-equivalent lifecycle), `src/timer.c` (timer heap), and `src/unix/loop-watcher.c` (I/O watchers). This is the "how a production reactor is structured" view.
+- [Redis `ae.c`](https://github.com/redis/redis/blob/unstable/src/ae.c) (C) — a compact, very readable single-file event loop with `select`/`epoll`/`kqueue` backends, a ready queue, and timer processing. A great second data point for Stage 4's `_run_once`.
+- [Trio](https://github.com/python-trio/trio) (Python) — an asyncio alternative with structured concurrency and a rigorous cancellation model. Study `src/trio/_core/_run.py` (`Runner`, `_run_impl`), `_io_epoll.py`/`_io_kqueue.py`, and `_core/_traps.py` for how cancellation scopes (nurseries) replace bare `cancel()`.
+- [Curio](https://github.com/dabeaz/curio) (Python) — David Beazley's minimal async library built directly on generators/coroutines. Study `curio/kernel.py` for a small, pedagogical kernel and `curio/io.py` for socket primitives; compare its explicit `await`-based cancellation to Stage 12.
+- [gevent](https://github.com/gevent/gevent) (Python) — greenlets + a hub event loop (`src/gevent/_hub_primitives.py`, `libev`/`libuv` cores). Useful contrast: implicit cooperative switching via monkey-patching vs. your explicit `await` suspension points.
+- [Tokio](https://github.com/tokio-rs/tokio) (Rust) — a modern multi-threaded async runtime. Study `tokio/src/runtime/scheduler/` (work-stealing executor) and `tokio/src/io/` (readiness-driven I/O) to see how far the single-threaded reactor model scales; the two-layer runtime/executor split is worth understanding.
+- [Boost.Asio](https://github.com/boostorg/asio) (C++) — a proactor-based alternative to the Unix readiness model. Study its `io_context` design to understand completion-based I/O (Windows IOCP, `io_uring`), the model your `selectors`-based loop deliberately does not use.
 
 ## Contents
 
@@ -50,22 +63,15 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - What `uv` manages: `.python-version` pins the interpreter (3.12 here) even though the system Python is 3.14 — **always run code through `uv run`**, never bare `python3`.
 - Why zero runtime dependencies: the entire point of this project is to build the machinery using only the standard library (`selectors`, `collections.deque`, `heapq`, `time`, `socket`, `threading` for test helpers only).
 
-### Implementation logic
+### Interfaces
 
-1. Add pytest as a dev dependency: `uv add --dev pytest`.
-2. Create the package layout:
-   ```
-   loop/
-     __init__.py      # exports EventLoop (placeholder for now)
-   tests/
-     test_smoke.py
-   ```
-3. `test_smoke.py` should do the minimum: `from loop import EventLoop` and assert a trivial property (e.g. `EventLoop()` constructs and has an empty ready queue).
-4. Decide the module split you'll grow into (empty files are fine now):
-   - `loop/loop.py` — the event loop itself (Stages 1–4)
-   - `loop/futures.py` — Future/Task (Stage 7)
-   - `loop/sock.py` — async socket primitives (Stage 10)
-5. Run `uv run pytest` and confirm green.
+The package skeleton to design toward (empty modules are fine now):
+
+- `loop/__init__.py` — exports `EventLoop`
+- `loop/loop.py` — the event loop itself (Stages 1–4)
+- `loop/futures.py` — `Future` / `Task` (Stage 7)
+- `loop/sock.py` — async socket primitives (Stage 10)
+- `tests/` — pytest suite
 
 ### Edge cases & pitfalls
 
@@ -75,9 +81,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- Add a `conftest.py` in `tests/` early with a fixture that constructs a fresh `EventLoop` per test — you'll reuse it in every subsequent stage.
-- Consider `uv run pytest -x --tb=short` as your default dev loop; later stages fail in ways that are easier to read with short tracebacks.
-- This is also the stage to verify the whole command chain end-to-end: `uv run main.py` should still print its hello message.
+- Which shared fixture will every stage reuse? Plan a fresh `EventLoop` per test from the start.
+- What should your default dev-loop command be, and does it keep tracebacks short?
+- Before moving on, confirm the whole chain works end-to-end (`uv run main.py`).
 
 ### References
 
@@ -109,29 +115,12 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **Loop liveness:** the loop exits when there's nothing left to do. Right now "nothing" = empty ready queue; Stages 2–4 will generalize this to "no ready callbacks AND no timers AND no watched fds".
 - Why callbacks and not threads: single-threaded means no locks, no races — the only concurrency is interleaving between callback boundaries.
 
-### Implementation logic
+### Interfaces
 
-1. `EventLoop.__init__`: `self._ready = deque()`, `self._running = False`, `self._stopping = False`.
-2. `call_soon(callback, *args)`: append a `(callback, args)` tuple to `_ready`. Return a handle if you like (asyncio returns a `Handle`) — keep it minimal now.
-3. `run_forever()`:
-   ```
-   self._running = True
-   while not self._stopping and self._ready:
-       cb, args = self._ready.popleft()
-       cb(*args)
-   self._running = False
-   ```
-4. `stop()`: set `_stopping = True` — takes effect on the next iteration check.
-5. Test shape:
-   ```python
-   order = []
-   loop = EventLoop()
-   loop.call_soon(order.append, "a")
-   loop.call_soon(order.append, "b")
-   loop.run_forever()
-   assert order == ["a", "b"]
-   ```
-6. Second test: a callback calling `loop.stop()` mid-queue — assert later-scheduled callbacks never run.
+- `EventLoop()` — constructs with an empty ready queue.
+- `call_soon(callback, *args)` — schedule a callback to run soon.
+- `run_forever()` — run until stopped or idle.
+- `stop()` — request the loop to stop.
 
 ### Edge cases & pitfalls
 
@@ -142,9 +131,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- This is the exact shape of the "30-line asyncio" toy loops — a deque and a `while` (see the DEV Community reference). The magic later isn't in this loop; it's in what gets enqueued.
-- Study asyncio's naming as you go: `call_soon`, `call_later`, `run_forever`, `stop` — mirroring the real API makes Stage 13 (parity) almost free.
-- Skip a re-queue-himself-forever callback test for now (infinite loop) — that scenario only makes sense once timers/I/O let the loop block between work.
+- The shape of a minimal loop is a queue plus a `while`. What gets enqueued is where the real design lives.
+- Should your names mirror asyncio's (`call_soon`, `call_later`, `run_forever`, `stop`)? What does that buy you in Stage 13?
+- Which scenario is not worth testing until timers/I/O exist, and why?
 
 ### References
 
@@ -177,28 +166,10 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **`time.monotonic()` vs `time.time()`:** wall-clock time can jump (NTP, DST); monotonic never goes backwards. Deadlines must be monotonic or a clock adjustment could starve or fast-fire timers.
 - **Blocking budget:** this is the first time the loop has a choice about *how long to wait* when the ready queue is empty. That computed timeout becomes the seed of Stage 4's `select(timeout)`.
 
-### Implementation logic
+### Interfaces
 
-1. `EventLoop.__init__`: `self._timers = []` (heap of `(deadline, seq, callback, args)`).
-2. `call_later(delay, callback, *args)`:
-   ```python
-   deadline = time.monotonic() + delay
-   heapq.heappush(self._timers, (deadline, next(self._timer_seq), callback, args))
-   ```
-   The `seq` tiebreaker is essential — see pitfalls.
-3. `_fire_expired_timers()`:
-   ```python
-   now = time.monotonic()
-   while self._timers and self._timers[0][0] <= now:
-       _, _, cb, args = heapq.heappop(self._timers)
-       self.call_soon(cb, *args)
-   ```
-   Promote, don't run in place — timers go through the same ready-queue path as everything else.
-4. Loop exit condition update: run while `self._ready or self._timers`.
-5. Timeout computation (for now, with plain `time.sleep`):
-   - If `_ready` is non-empty: timeout = 0 (no waiting).
-   - Elif `_timers`: timeout = `max(0, next_deadline - now)`.
-6. `run_forever` tick: fire expired timers → drain ready → if both empty, sleep until next deadline (or return if no timers either).
+- `call_later(delay, callback, *args)` — schedule a callback for a future deadline.
+- Internal helpers to design: how expired timers are promoted to the ready queue, and how the loop computes how long it may block.
 
 ### Edge cases & pitfalls
 
@@ -210,9 +181,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- The deadline-heap + promote-to-ready pattern is exactly what the TechTalk Scheduler article does with its `sleeping` list and `call_later`; steal its structure.
-- Think of the "computed timeout" as a variable that will later be passed to `selector.select()` instead of `time.sleep()` — Stage 4 makes this swap. Naming it `timeout` now will make the refactor a one-liner.
-- Test trick: verify interleaving with two tasks (they don't exist yet — use plain closures): schedule `t1` that records `start = monotonic()` then a timer that fires at +100ms recording `end`; assert a timer scheduled at +50ms ran *between* them. You can emulate with two timers at 50ms/100ms and one `call_soon` first.
+- Compare your deadline-promotion approach against the TechTalk Scheduler article's `sleeping` list.
+- What value will later be handed to `selector.select()` instead of `time.sleep()`, and how does naming it now simplify Stage 4?
+- How would you show that a timer at +50 ms ran *between* two timer-backed closures at +100 ms?
 
 ### References
 
@@ -245,16 +216,10 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **`selectors.DefaultSelector`:** stdlib wrapper that picks the best backend — `epoll` on Linux, `kqueue` on macOS, `select` fallback. Same API everywhere: `register(fd, EVENT_READ|EVENT_WRITE, data)`, `select(timeout)` → `[(key, mask)]`, `unregister(fd)`.
 - **Why `data=callback`:** the selector stores an opaque payload per fd; storing the callback makes dispatch trivial: `key.data(key.fileobj, mask)`.
 
-### Implementation logic
+### Interfaces
 
-1. `EventLoop.__init__`: add `self._selector = selectors.DefaultSelector()`.
-2. `add_reader(fd, callback, *args)` → `self._selector.register(fd, selectors.EVENT_READ, (callback, args))`. Mirror for `add_writer` with `EVENT_WRITE`. Raise/return False if already registered (pick one, document it).
-3. `remove_reader(fd)` / `remove_writer(fd)` → `unregister`, tolerating unknown fds.
-4. Wire into the tick (rough version; Stage 4 formalizes `_run_once`):
-   - compute `timeout` from Stage 2 logic (0 if ready work pending, else time to next timer, else `None` — but cap `None` in tests so the suite can't hang forever).
-   - `events = self._selector.select(timeout)`; for each `(key, mask)`: pop callback from `key.data` and `call_soon` it (don't run inline — keep one execution path).
-   - then fire expired timers, drain ready.
-5. Test shape: `r, w = os.pipe()`, `loop.add_reader(r, on_read)`, `os.write(w, b"hi")` from a `call_later(0.01, ...)` or a thread, `run_forever` with a stop condition once data arrives.
+- `add_reader(fd, callback, *args)` / `add_writer(fd, callback, *args)`
+- `remove_reader(fd)` / `remove_writer(fd)`
 
 ### Edge cases & pitfalls
 
@@ -265,9 +230,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- Start with `os.pipe()` not sockets: no ports, no `TIME_WAIT`, fully hermetic. Sockets arrive in Stage 10.
-- Keep dispatch uniform: I/O readiness just enqueues into `_ready`. One execution path (drain ready queue) keeps exception handling in one place.
-- Peek at CPython's `base_events.py`: `add_reader` stores `(callback, args)` as selector `data` — exactly this shape.
+- Why start with `os.pipe()` rather than sockets?
+- Should I/O readiness run inline or enqueue into the same ready path as everything else? What does a single execution path buy for exception handling?
+- How does CPython's `base_events.py` store the callback in the selector's `data`?
 
 ### References
 
@@ -300,28 +265,10 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **Timeout selection rule:** ready work pending → timeout 0 (never block with work queued); else time-to-next-timer; else `None` (block until I/O) — but only if fds are registered, otherwise exit.
 - **Fairness:** I/O callbacks and timers both funnel through `_ready`, so a flood of ready fds can't starve timers forever — they interleave tick by tick.
 
-### Implementation logic
+### Interfaces
 
-1. Extract `_run_once(self)`:
-   ```python
-   def _run_once(self):
-       timeout = self._compute_timeout()   # 0 / delay / None
-       if self._selector.get_map():
-           events = self._selector.select(timeout)
-           for key, mask in events:
-               cb, args = key.data
-               self.call_soon(cb, *args)
-       elif timeout:
-           time.sleep(timeout)
-       self._fire_expired_timers()
-       ntodo = len(self._ready)
-       for _ in range(ntodo):
-           cb, args = self._ready.popleft()
-           self._run_callback(cb, args)    # try/except wrapper from Stage 1
-   ```
-2. `_compute_timeout()`: `0.0` if `_ready` non-empty; elif `_timers`: `max(0, deadline - monotonic())`; elif selector has fds: `None`; else: sentinel meaning "exit".
-3. `run_forever()`: `while not stopping and (ready or timers or fds): self._run_once()`.
-4. Bound the per-tick callback count (`ntodo` snapshot) so callbacks scheduled *during* the drain run next tick — prevents a self-rescheduling callback from starving I/O/timers within one tick.
+- `_run_once()` — one scheduling tick. Design its phases yourself: compute timeout, wait, promote I/O and timers, run ready callbacks.
+- `_compute_timeout()` — returns `0`, a delay, or `None` to mean "block until I/O".
 
 ### Edge cases & pitfalls
 
@@ -332,15 +279,17 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- Read asyncio's `_run_once` source side-by-side while writing yours; line up the five steps and you'll catch ordering bugs (e.g. firing timers before vs after select changes deadline precision).
-- Test the timeout rule directly: with only a 100 ms timer pending, `_compute_timeout()` should return ≈0.1; with ready work pending, exactly 0.
-- Keep `_run_callback` as the single exception-handling choke point from Stage 1 — `_run_once` stays clean.
+- Line your `_run_once` up against asyncio's and compare the phase order; which orderings change deadline precision?
+- What should `_compute_timeout()` return with pending ready work, with only a 100 ms timer, with only fds?
+- Where is your single exception-handling choke point, and why does that keep `_run_once` clean?
 
 ### References
 
 - CPython `Lib/asyncio/base_events.py` — `BaseEventLoop._run_once` (the canonical implementation)
 - [Build your own Event Loop in Python](https://techtalk.digitalpress.blog/build-your-own-event-loop-in-python/) — `run()` mixing ready/sleeping/select
 - [Beginner's Tutorial: MiniLoop](https://geekyhumans.com/beginners-tutorial-building-a-custom-asyncio-event-loop-in-python/) — ready vs scheduled separation
+- [Redis `ae.c`](https://github.com/redis/redis/blob/unstable/src/ae.c) — a compact production `run_once`: ready queue + timer heap + `poll` (see Similar Projects)
+- [libuv `src/unix/core.c`](https://github.com/libuv/libuv/blob/v1.x/src/unix/core.c) — `uv_run` lifecycle and loop phases (see Similar Projects)
 
 ### Done when
 
@@ -367,28 +316,10 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **Cooperative multitasking:** unlike threads, *the task decides* when to yield. No locks needed, but a task that never yields freezes the loop — the fundamental tradeoff of the whole project.
 - **`StopIteration` as return channel:** a `return value` inside a generator raises `StopIteration(value)`. The loop catches it to learn the task's result. This is load-bearing for Stage 6.
 
-### Implementation logic
+### Interfaces
 
-1. Represent a task as a plain generator object scheduled via `call_soon`-style stepping. Minimal approach: wrap stepping in a closure:
-   ```python
-   def _step(gen):
-       try:
-           next(gen)
-       except StopIteration:
-           pass          # done — don't reschedule
-       else:
-           loop.call_soon(lambda: _step(gen))  # suspend → requeue
-   ```
-2. Generator-based `sleep(seconds)`:
-   ```python
-   def sleep_gen(seconds):
-       deadline = time.monotonic() + seconds
-       while time.monotonic() < deadline:
-           yield
-   ```
-   Each `next()` either re-yields (not yet) or returns (expired).
-3. Composition with `yield from`: task bodies use `yield from sleep_gen(1)` so the inner yields bubble up to the loop's `next()` call unchanged.
-4. Tests assert *interleaving*: task A (2× 50 ms sleeps) and task B (1× 100 ms) produce `A B A`-ish ordering and finish in ≈100 ms total. Add the classic 1 ms `time.sleep` anti-spin? No — generators requeue every tick, so this stage busy-loops by design; note it, fix it in Stage 7 with timer-backed Futures.
+- `sleep_gen(seconds)` — a generator that yields until its deadline passes.
+- Task stepping is a design choice: how a generator is driven to its next suspension, and how completion is detected.
 
 ### Edge cases & pitfalls
 
@@ -399,9 +330,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- This is the DEV-community "30-line loop" almost verbatim: queue of `(job, wake_at)`, `next(job)`, requeue or drop. If your code is much longer, you're overcomplicating it.
-- Keep tasks as raw generators + closures for now — the `Task` class comes in Stage 7 once Futures exist. Resist building the class early.
-- Write the test to print timestamps; watching `A@0ms B@0ms A@50ms done@100ms` is the moment the model clicks.
+- What is the minimal state a driven generator needs, and why is that the whole model?
+- Why resist introducing a `Task` class before Futures exist?
+- Which timestamp trace would convince you two tasks truly interleaved?
 
 ### References
 
@@ -433,32 +364,6 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **Why this matters for `await`:** `await x` is defined as `yield from x.__await__()`. Nailing delegation now means Stage 8's native coroutines work for free.
 - **The delegation chain:** outer task → middle `yield from` → inner sleep. The loop only ever sees the *innermost* yields. Every frame in between is transparent.
 
-### Implementation logic
-
-1. No loop changes needed — `yield from` is interpreter machinery. This stage is about *using* it correctly and testing the semantics:
-   ```python
-   def inner():
-       yield from sleep_gen(0.05)
-       return 42
-
-   def outer():
-       result = yield from inner()   # result == 42
-       results.append(result)
-       yield from sleep_gen(0.05)
-   ```
-2. Drive `outer()` with the Stage 5 stepper unchanged — prove the loop is oblivious to nesting depth.
-3. Exception case:
-   ```python
-   def failing():
-       yield
-       raise ValueError("boom")
-
-   def outer2():
-       yield from failing()   # ValueError must propagate to the loop's next()
-   ```
-   Assert the stepper sees `ValueError` (not `StopIteration`), records it, drops the task.
-4. Three-level nesting test (outer → middle → inner) to prove arbitrary depth.
-
 ### Edge cases & pitfalls
 
 - **Swallowing exceptions mid-chain:** a `try/except` around `yield from` that catches everything and doesn't re-raise leaves the outer task suspended forever once Futures arrive (Stage 7) — establish the "always propagate or resolve" discipline now.
@@ -468,9 +373,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- Read the formal `yield from` expansion in PEP 380 once — it's ~15 lines of pseudocode and demystifies `send`/`throw` passthrough completely.
-- The CodingPancake guide's delegation table (yield-loop vs `yield from`/`await`) is a good cheat sheet for what's automatic vs manual.
-- Keep a debug print of "who yielded what" while developing: if the loop ever receives a raw generator object, some frame used `yield` where it meant `yield from`.
+- How does PEP 380's expansion explain `send`/`throw` passthrough?
+- Which parts of delegation are automatic with `yield from` versus manual with a yield loop?
+- If the loop ever receives a raw generator object, which mistake produced it?
 
 ### References
 
@@ -503,56 +408,25 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **`Future.__await__`:** defined as `return (yield self)` — yielding *oneself* to the driver. This single line is the entire bridge to `await` in Stage 8.
 - **Who resolves timer Futures:** `loop.call_later(deadline, future.set_result, value)` — the timer heap from Stage 2 becomes the wake-up mechanism. No spinning.
 
-### Implementation logic
+### Interfaces
 
-1. `loop/futures.py`:
-   ```python
-   class Future:
-       def __init__(self):
-           self._result = None; self._done = False; self._callbacks = []
-       def done(self): return self._done
-       def result(self):
-           if not self._done: raise RuntimeError("not done")
-           if isinstance(self._result, BaseException): raise self._result
-           return self._result
-       def set_result(self, value):
-           self._done = True; self._result = value
-           for cb in self._callbacks: cb(self)
-       def add_done_callback(self, fn):
-           if self._done: fn(self)
-           else: self._callbacks.append(fn)
-       def __await__(self):
-           return (yield self)
-   ```
-2. `Task(Future)` drives a coroutine:
-   ```python
-   class Task(Future):
-       def __init__(self, coro, loop):
-           super().__init__()
-           self._coro = coro; self._loop = loop
-           self._loop.call_soon(self._step)
-       def _step(self, future=None):
-           try:
-               if future is None: yielded = self._coro.send(None)
-               else: yielded = self._coro.send(future.result())
-           except StopIteration as e:
-               self.set_result(e.value); return
-           except BaseException as e:
-               self.set_result(e); return     # stored; raised on .result()
-           if isinstance(yielded, Future):
-               yielded.add_done_callback(self._step)
-           else:
-               raise RuntimeError(f"coroutine yielded {yielded!r}, expected Future")
-   ```
-3. `loop.create_task(coro)` → `Task(coro, self)`; timer-backed sleep:
-   ```python
-   def sleep(self, delay, result=None):
-       fut = Future()
-       self.call_later(delay, fut.set_result, result)
-       return fut
-   ```
-   Note: `sleep` returns a Future (awaitable via `__await__`), it is *not* itself a coroutine.
-4. Fix the exit condition: pending *unresolved Futures with callbacks* keep the loop alive only via their underlying timer/fd registrations — the loop still only tracks ready/timers/fds.
+```python
+class Future:
+    def done(self) -> bool: ...
+    def result(self): ...
+    def set_result(self, value) -> None: ...
+    def add_done_callback(self, fn) -> None: ...
+    def __await__(self): ...
+
+class Task(Future):
+    def __init__(self, coro, loop) -> None: ...
+
+# on EventLoop:
+def create_task(self, coro) -> Task: ...
+def sleep(self, delay, result=None) -> Future: ...
+```
+
+`sleep` returns an awaitable `Future`; it is not itself a coroutine. Decide how the loop's exit condition accounts for pending Futures.
 
 ### Edge cases & pitfalls
 
@@ -564,9 +438,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- Follow the indooroutdoor.io article's Task/Future/Scheduler build closely — it derives exactly this protocol (yielded Future replaces the task in the queue, resolution callback reschedules).
-- Test CPU spin explicitly: run two 100 ms sleeps, assert wall ≈100 ms *and* that a counter incremented by a tight `call_soon` re-scheduler barely advances (or measure process CPU time).
-- Keep `Future` loop-agnostic (no loop reference) and put loop-awareness only in `Task` — this pays off in Stage 10 where socket Futures resolve from selector callbacks.
+- How does the indooroutdoor.io build replace a parked task in the queue with the Future it yielded, and reschedule on resolution?
+- How would you prove the loop is no longer spinning while a task sleeps?
+- Should `Future` know about the loop at all? What does keeping it loop-agnostic buy in Stage 10?
 
 ### References
 
@@ -599,19 +473,10 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **`await x` ≈ `yield from x.__await__()`:** for a Future, `__await__` yields the Future itself to the driver — the identical object your Stage 7 code yielded manually. For a coroutine, `__await__` chains into the sub-coroutine. Read PEP 492 alongside PEP 380.
 - **First-send rule:** a coroutine must be started with `send(None)`; sending a real value first raises `TypeError`. `Task._step` already honors this (first call passes `None`).
 
-### Implementation logic
+### Interfaces
 
-1. Verify — don't rewrite: take the Stage 7 test bodies, convert `def task(): yield from fut` → `async def task(): await fut`, drive with the same `Task` class. If `Task._step` used `next()` anywhere, switch to `.send(None)`.
-2. `sleep` stays a plain function returning a `Future` — `await loop.sleep(0.05)` works because `Future` is awaitable. Optionally add an `async def sleep` wrapper for ergonomics; it's equivalent.
-3. Add `loop.run_until_complete(coro_or_future)`: wrap in a Task, `run_forever` until that Task completes, return/raise its result. This mirrors `asyncio.run()`'s core and becomes the standard test driver:
-   ```python
-   def run_until_complete(self, awaitable):
-       task = self.create_task(_ensure_coro(awaitable))
-       task.add_done_callback(lambda _: self.stop())
-       self.run_forever()
-       return task.result()
-   ```
-4. Rewrite the smoke interleaving test with `async def main()` + `create_task` children — this is the shape every later stage uses.
+- `run_until_complete(awaitable)` — drive an awaitable to completion, return its result or raise its exception.
+- `sleep` stays a plain function returning a `Future`; it is already awaitable.
 
 ### Edge cases & pitfalls
 
@@ -622,9 +487,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- The jacobpadilla article's refactor section (generators → `__await__` + `async`) is the exact diff you're making — compare line by line.
-- If everything passes by just changing syntax, say so loudly in a commit message: "async/await is not magic" is the thesis of the whole project.
-- Keep one generator-based test alive (don't delete Stage 5's file) as documentation of the equivalence.
+- Compare your change against the jacobpadilla refactor section — how small is the diff really?
+- If only syntax changed, what does that say about `async`/`await`?
+- Why keep one generator-based test around after the rewrite?
 
 ### References
 
@@ -657,33 +522,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **Result ordering vs completion ordering:** results land in *argument* order regardless of finish order — requires pre-allocated slots + index capture per child.
 - **Failure semantics (a design decision):** asyncio's default cancels siblings on first exception; a simpler valid choice is "record the first exception, still await the rest" or "fail fast, leave siblings running". Pick one, document it, test it — Stage 12 revisits with cancellation.
 
-### Implementation logic
+### Interfaces
 
-1. `async def gather(*awaitables)` or a function returning a parent `Future`:
-   ```python
-   def gather(self, *awaitables):
-       children = [self.create_task(a) for a in awaitables]
-       parent = Future()
-       results = [None] * len(children)
-       remaining = len(children)
-       def _child_done(i, child):
-           nonlocal remaining
-           if parent.done(): return
-           try: results[i] = child.result()
-           except BaseException as e:
-               parent.set_result(e)   # or set_exception path; document choice
-               return
-           remaining -= 1
-           if remaining == 0:
-               parent.set_result(results)
-       for i, ch in enumerate(children):
-           ch.add_done_callback(lambda c, i=i: _child_done(i, c))
-       if not children: parent.set_result([])
-       return parent
-   ```
-2. `await loop.gather(...)` works because the parent is a Future (`__await__`).
-3. Empty-`gather()` resolves immediately with `[]`.
-4. Timing test: children sleeping 50/100/150 ms → wall ≈150 ms (assert `< 250 ms` with jitter margin, `>= 150 ms`).
+- `gather(*awaitables) -> Future` — resolves with results in argument order; empty `gather()` resolves immediately with `[]`.
 
 ### Edge cases & pitfalls
 
@@ -694,9 +535,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- The countdown-latch pattern (counter + indexed slots) recurs in barriers, `wait()`, connection pools — learn it cold here.
-- Keep `gather` loop-agnostic if you can (takes Tasks/Futures, returns a Future); only child *creation* needs the loop. This makes Stage 13's parity tests trivially portable.
-- Decide failure semantics *before* writing tests: write the docstring first, then the tests, then the code.
+- Where else does the countdown-latch pattern (counter + indexed slots) recur, and why is it general?
+- Should `gather` need the loop at all, or only child creation? How does that affect Stage 13?
+- What failure semantics will you choose, and why must that decision come before the tests?
 
 ### References
 
@@ -727,23 +568,13 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **One-shot selector registration:** each await registers a fresh reader/writer callback that unregisters itself on first firing — unlike Stage 3's persistent pipe reader. This prevents stale callbacks firing for the *next* await on the same fd.
 - **Partial sends / empty recvs:** `send` may write fewer bytes than given (loop until all sent); `recv` returning `b""` means orderly shutdown (resolve with `b""`, don't re-register — that's Stage 11's close path).
 
-### Implementation logic
+### Interfaces
 
-1. `loop/sock.py` (functions take the loop explicitly, or make them methods — pick one):
-   ```python
-   async def sock_recv(loop, sock, n):
-       fut = Future()
-       def _on_readable():
-           try: data = sock.recv(n)
-           except BlockingIOError: return   # spurious wakeup; stay registered
-           loop.remove_reader(sock.fileno())
-           fut.set_result(data)
-       loop.add_reader(sock.fileno(), _on_readable)
-       return await fut
-   ```
-2. `sock_sendall`: same shape with `add_writer` + `sock.send` loop over the buffer; resolve with bytes-sent count when drained.
-3. `sock_accept`: `add_reader` on the listening socket; on readiness `conn, addr = sock.accept()`, `conn.setblocking(False)`, resolve `(conn, addr)`.
-4. Test with `socketpair()`: both ends non-blocking, server task `await sock_recv`, client `await sock_sendall`, assert echo. Then a real loopback TCP pair (`bind 127.0.0.1:0`) to prove it works over real sockets, not just pairs.
+- `sock_recv(loop, sock, n) -> bytes`
+- `sock_sendall(loop, sock, data) -> None`
+- `sock_accept(loop, listener) -> (conn, addr)`
+
+(Functions or loop methods — pick one style and stay consistent.)
 
 ### Edge cases & pitfalls
 
@@ -755,9 +586,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- Mirror asyncio's `sock_recv`/`sock_sendall`/`sock_accept` signatures (`loop.sock_recv(sock, n)`) — Stage 13 parity becomes a drop-in swap.
-- The indooroutdoor.io `AcceptSocket`/`ReadSocket` Future subclasses are the same idea expressed as classes; functions + one-shot callbacks are simpler — pick the style you prefer, both are correct.
-- Debug with `ss -tlnp` / `netstat` if the TCP test hangs: a missing `listen()` or a full backlog looks exactly like a loop bug.
+- Why mirror asyncio's `sock_*` signatures exactly? What does Stage 13 gain?
+- Functions plus one-shot callbacks vs Future subclasses (the indooroutdoor.io style) — which fits your design, and why?
+- If the TCP test hangs, which setup mistake would it resemble?
 
 ### References
 
@@ -790,28 +621,10 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **Per-connection tasks:** each client gets an independent coroutine; interleaving happens at `await` points (waiting for data). No threads, no locks, no shared state beyond the listener.
 - **Backpressure intuition:** a slow client only suspends its own task (parked on a selector registration), never the server. Contrast with thread-per-connection memory cost — that's the scalability argument for the whole project.
 
-### Implementation logic
+### Interfaces
 
-1. Server coroutine:
-   ```python
-   async def serve_forever(loop, listener):
-       while True:
-           conn, addr = await loop.sock_accept(listener)
-           loop.create_task(handle_client(loop, conn))
-
-   async def handle_client(loop, conn):
-       try:
-           while True:
-               data = await loop.sock_recv(conn, 4096)
-               if not data: break            # orderly shutdown
-               await loop.sock_sendall(conn, data)
-       finally:
-           loop.remove_reader(conn.fileno())  # tolerate missing
-           conn.close()
-   ```
-2. Test harness: bind `127.0.0.1:0` (OS picks a free port — never hardcode), run the server on your loop in a background thread via `run_forever`, drive N=20–50 clients from `threading` (blocking sockets are fine *in test threads*), `join` with timeouts, assert payloads.
-3. Concurrency proof: clients sleep-stagger their sends; assert total wall ≈ single-client time, not N×. Or: one client sends slowly (byte-at-a-time with delays) while others finish fast — slow client must not stall anyone.
-4. Keep a connection counter (increment on accept, decrement in `finally`) and assert it returns to 0 — proves no leaked tasks.
+- `serve_forever(loop, listener)` — accept loop that spawns a task per connection.
+- `handle_client(loop, conn)` — per-connection echo until orderly shutdown.
 
 ### Edge cases & pitfalls
 
@@ -823,9 +636,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- Start with N=5 clients and grow to 50+ once green — separates protocol bugs (fail at 1) from lifecycle bugs (fail at 50).
-- Watch `ls /proc/<pid>/fd | wc -l` (or `lsof`) across runs: constant fd count = clean; growing = leak. Add an fd-count assertion if you're keen.
-- This is the classic CodeCrafters-style endgame ("serve concurrent clients on one thread") — if it holds up at 100+ connections with correct echoes, the reactor is real.
+- Why start with a handful of clients before scaling to 50+? What do the two failure scales tell you apart?
+- How will you tell a clean run from an fd leak?
+- At what connection count would you be convinced the reactor is real?
 
 ### References
 
@@ -858,33 +671,12 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **`CancelledError` vs regular exceptions:** it inherits from `BaseException` (like `KeyboardInterrupt`), not `Exception` — so bare `except Exception` doesn't swallow it. Your `Task._step` must catch `BaseException` separately from `StopIteration` and record cancellation state distinctly from failure.
 - **Propagation rule:** an exception in a child Task must reach whoever awaits it *and* mark the child done — never leave an awaiter parked on a Future that will never resolve. A wedged awaiter is the signature bug of hand-rolled executors.
 
-### Implementation logic
+### Interfaces
 
-1. `Task.cancel()`:
-   ```python
-   def cancel(self):
-       if self.done(): return False
-       self._cancel_requested = True
-       # wake the step machinery with a throw instead of a send:
-       self._loop.call_soon(self._step_throw, CancelledError())
-       return True
-
-   def _step_throw(self, exc):
-       try:
-           yielded = self._coro.throw(exc)
-       except StopIteration as e:
-           self.set_result(e.value)   # suppressed cancellation → completes
-       except CancelledError as e:
-           self.set_exception_as_cancelled(e)
-       except BaseException as e:
-           self.set_result(e)
-       else:
-           # resumed and yielded another Future — re-suspend on it
-           yielded.add_done_callback(self._step)
-   ```
-2. Distinguish states: `cancelled()` flag vs `done()` vs `exception()`. `result()` raises `CancelledError` if cancelled, the stored exception if failed, the value if ok.
-3. Shielding (optional, document if skipped): `await shield(fut)` that detaches cancellation — note asyncio has it; you may defer, but write down the decision.
-4. Tests: (a) cancel pending sleep → `CancelledError` on `result()`, task `cancelled()` True; (b) 3-deep chain raise → identical exception object type+message at top; (c) sibling tasks unaffected by one cancellation (loop keeps ticking, others complete).
+- `Task.cancel() -> bool`
+- `Task.cancelled() -> bool`
+- `Task.exception()` / `Task.result()` state semantics (value vs exception vs cancelled).
+- Optional: `shield(fut)` — document whether you implement it or defer.
 
 ### Edge cases & pitfalls
 
@@ -896,9 +688,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- Read CPython `Task.cancel` + `Task.__step` + `coro.throw` flow while implementing — the state machine (pending → cancelling → cancelled vs finished) is subtle and theirs is the reference.
-- Test cancellation timing variants: cancel before first step, cancel mid-sleep, cancel an already-done task, cancel twice. Each hits a different branch.
-- The CodingPancake guide's "swallowing exceptions in yield chains" pitfall is the same bug class: any path where an error state doesn't reach the root Task frame = permanent suspension.
+- How does CPython model the pending → cancelling → cancelled/finished state machine?
+- Which cancellation timings hit distinct branches (before first step, mid-sleep, already done, twice)?
+- Why does any error state that fails to reach the root Task frame become a permanent suspension?
 
 ### References
 
@@ -906,6 +698,8 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - [PEP 492](https://peps.python.org/pep-0492/) — `CancelledError` semantics
 - [Custom Event Loop guide — exception propagation pitfalls](https://www.codingpancake.com/2026/07/how-to-implement-custom-event-loop-in.html)
 - Python [`coroutine.throw`](https://docs.python.org/3/reference/expressions.html#await-expression) docs
+- [Trio `_core/_run.py`](https://github.com/python-trio/trio/blob/main/src/trio/_core/_run.py) — cancellation scopes / nurseries, a stricter model than bare `task.cancel()` (see Similar Projects)
+- [Curio `kernel.py`](https://github.com/dabeaz/curio/blob/master/curio/kernel.py) — explicit, `await`-driven cancellation and traps in a small kernel (see Similar Projects)
 
 ### Done when
 
@@ -931,19 +725,10 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 - **The minimal `asyncio` surface you mirror:** `call_soon`, `call_later`, `add_reader`/`add_writer`/`remove_reader`, `create_task`, `sock_recv`/`sock_sendall`/`sock_accept`, `run_forever`/`run_until_complete`/`stop`. If your names already match (they should — Stages 1–10 followed asyncio naming), the adapter is ~20 lines.
 - **`AbstractEventLoop` (optional, stretch):** subclassing `asyncio.AbstractEventLoop` and registering an event-loop policy makes your loop a literal `asyncio` backend. Powerful but fiddly; attempt only after the parametrized tests pass.
 
-### Implementation logic
+### Interfaces
 
-1. Define a tiny driver protocol both backends satisfy:
-   ```python
-   # tests/test_parity.py
-   @pytest.fixture(params=["mine", "asyncio"])
-   def driver(request): ...
-   ```
-   - `"mine"`: spins your `EventLoop` in a thread, exposes `run(coro)` via `run_until_complete`, plus `sleep/gather/sock_*` bound to your loop.
-   - `"asyncio"`: `asyncio.run(...)` with the real primitives.
-2. Port 3–5 core scenarios behind the driver: sleep interleaving (Stage 7), gather ordering (Stage 9), socketpair echo (Stage 10), mid-sleep cancellation (Stage 12). Keep each scenario backend-agnostic (no loop-specific imports inside the test body).
-3. Write the differences doc: create a `DIFFERENCES.md` (or README section) listing every divergence found — e.g. "no `shield()`", "cancellation doesn't propagate to gather siblings (fails fast instead)", "no thread-safety (`call_soon_threadsafe` missing)", "timer precision ±X ms vs asyncio's". Each entry: behavior, why, planned or wontfix.
-4. (Stretch) Implement `asyncio.AbstractEventLoop` minimal methods and run one existing asyncio-based snippet (e.g. `asyncio.gather` itself) on your loop via a policy — proves interface compatibility, not just behavioral similarity.
+- A `driver` abstraction both backends satisfy, exposing `run(coro)` plus `sleep` / `gather` / `sock_*`; one implementation for your loop, one for `asyncio`.
+- A written list of known divergences, each with behavior, rationale, and planned/wontfix.
 
 ### Edge cases & pitfalls
 
@@ -954,9 +739,9 @@ Implement a single-threaded event loop (reactor) that monitors multiple I/O sour
 
 ### Hints
 
-- Start with the *easiest* scenario (gather ordering) to shake out fixture bugs before touching sockets/cancellation.
-- `asyncio`'s extra code over yours is corner cases (signal handling, exception groups, `contextvars`, thread-safety) — when a parity test passes, note *why* it's equivalent; when it fails, categorize: missing feature vs semantic difference vs timing flake.
-- The art049 "Demystifying AsyncIO" finale (running a real ASGI server on a custom loop) is the aspirational version of this stage — your parametrized suite is the pragmatic version.
+- Which scenario is easiest to start with, and how does it shake out fixture bugs before sockets/cancellation?
+- When a parity test fails, how will you categorize it: missing feature, semantic difference, or timing flake?
+- Which divergences are expected corner cases (signals, exception groups, `contextvars`, thread-safety)?
 
 ### References
 

@@ -2,7 +2,7 @@
 
 ## Projects
 
-### [Shell](shell.md)
+### [Shell](./shell.md)
 
 - **Description** minimal POSIX shell commands interpreter.
 - **Focus Areas:** Operating Systems (processes, system calls, I/O redirection, signals, environment variables).
@@ -14,7 +14,7 @@
 - **Description:** Implement your own version of `malloc` and `free` using `sbrk` or `mmap`. Explore different strategies like first-fit, best-fit, or segregated lists.
 - **Language:** `C`
 
-### [Event Loop / Async Runtime](loop.md)
+### [Event Loop / Async Runtime](./loop.md)
 
 - **Description:** Implement a single-threaded event loop (reactor) that monitors multiple I/O sources (e.g., network sockets, files) for readiness and dispatches user-defined callbacks or tasks when events occur. Optionally, build an "executor" on top to manage coroutines/futures, demonstrating cooperative multitasking.
 - **Focus Areas:** Operating Systems (I/O multiplexing: `select`/`poll`/`epoll`/`kqueue`, file descriptors), Networking (non-blocking I/O), Concurrency (event-driven programming, cooperative multitasking), Language Design (understanding how `async/await` works under the hood).

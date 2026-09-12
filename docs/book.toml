@@ -6,3 +6,4 @@ authors = ["khalil"]
 [output.html]
 default-theme = "rust"
 preferred-dark-theme = "navy"
+additional-css = ["toc.css"]
