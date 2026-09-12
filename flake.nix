@@ -21,9 +21,7 @@
             ];
             shellHook = ''
               {
-                gum style --bold --foreground 214 "CODE CRAFTER"
-                gum style --foreground 250 "shape software by hand"
-                gum style --foreground 243 "docs  ·  just --list for all recipes"
+                gum style --bold --foreground 214 "A CODE CRAFTER shapes software by hand :)"
               } | gum style --border rounded --border-foreground 214 --padding "0 2" --margin "1 0"
             '';
           };
