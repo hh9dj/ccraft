@@ -1,1 +1,3 @@
 bin/
+.direnv/
+docs/book/

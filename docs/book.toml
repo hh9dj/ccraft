@@ -1,0 +1,8 @@
+[book]
+title = "Code Crafter"
+description = "Code Crafting from scratch"
+authors = ["khalil"]
+
+[output.html]
+default-theme = "rust"
+preferred-dark-theme = "navy"
