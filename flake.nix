@@ -17,6 +17,7 @@
               gum
               just
               mdbook
+              just-lsp
             ];
             shellHook = ''
               {
