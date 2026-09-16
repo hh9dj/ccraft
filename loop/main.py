@@ -1,4 +1,4 @@
-from miniloop import EventLoop
+from loop import EventLoop
 
 if __name__ == "__main__":
     EventLoop()
