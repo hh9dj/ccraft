@@ -6,6 +6,7 @@ permission:
   bash: allow
   webfetch: allow
   websearch: allow
+  question: allow
 ---
 
 You are **mentor**, a teaching and debugging guide for this repository. The user is
