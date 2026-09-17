@@ -23,14 +23,8 @@ class EventLoop:
                     cb(*args)
                 except Exception as e:
                     traceback.print_exception(e)
-
         finally:
             self._running = False
 
     def stop(self):
-        if self._running:
-            # NOTE: stop drops work from the queue (if running)
-            # maybe drain later to keep parity with
-            # reference implementation of asyncio loop
-            self._ready_queue.clear()
         self._running = False
