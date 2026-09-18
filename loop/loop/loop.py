@@ -10,6 +10,9 @@ class EventLoop:
     def call_soon(self, cb, *args):
         self._ready_queue.append((cb, args))
 
+    def call_later(self, delay: float, cb, *args):
+        self._ready_queue.append((cb, args))
+
     def run_forever(self):
         if self._running:
             raise RuntimeError("Loop already running")

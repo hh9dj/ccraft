@@ -1,6 +1,3 @@
-# TODO: implement tests
-
-
 from loop.loop import EventLoop
 
 

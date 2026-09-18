@@ -7,7 +7,7 @@ permission:
     "docs/src/*.md": allow
     "docs/src/SUMMARY.md": deny
     "docs/src/index.md": deny
-  bash: ask
+  bash: allow
   webfetch: allow
   websearch: allow
 ---
