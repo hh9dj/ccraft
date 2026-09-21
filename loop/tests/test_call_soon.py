@@ -2,6 +2,7 @@ from loop.loop import EventLoop
 
 
 def test_absorb_exceptions(event_loop: EventLoop):
+    """A callback that raises does not stop the loop; later callbacks still run."""
 
     result = []
 
@@ -18,6 +19,7 @@ def test_absorb_exceptions(event_loop: EventLoop):
 
 
 def test_duplicate_running(event_loop: EventLoop):
+    """A reentrant run_forever raises RuntimeError."""
 
     result = []
 
@@ -38,11 +40,13 @@ def test_duplicate_running(event_loop: EventLoop):
 
 
 def test_immediate_return(event_loop: EventLoop):
+    """run_forever returns immediately when the ready queue is empty."""
     event_loop.run_forever()
     assert True
 
 
 def test_queue_order(event_loop: EventLoop):
+    """call_soon callbacks run in FIFO order."""
     result = []
 
     event_loop.call_soon(lambda x: result.append(x), 1)
@@ -53,6 +57,7 @@ def test_queue_order(event_loop: EventLoop):
 
 
 def test_resume_after_stop(event_loop: EventLoop):
+    """stop() halts the loop and leaves queued callbacks; a later run_forever drains them."""
     result = []
 
     event_loop.call_soon(lambda x: result.append(x), 1)

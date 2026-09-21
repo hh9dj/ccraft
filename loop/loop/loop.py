@@ -5,22 +5,28 @@ import traceback
 
 
 class EventLoop:
-    # TODO: include a tie-breaker for same deadline tasks
-    # to decide which take prio when two tasks are ready
-    #
-    #
     def __init__(self) -> None:
         self._ready_queue = collections.deque()
-        self._ready_heap = []
+        self._delayed_cb_heap = []
         self._running = False
+        self._sequence_order = 0
 
     def call_soon(self, cb, *args):
         self._ready_queue.append((cb, args))
 
     def call_later(self, delay: float, cb, *args):
-        # add cb + delay into heap as tuple
-        # each tick of run_forever should peak heap and check if its time to run the cb
-        heapq.heappush(self._ready_heap, (delay + time.monotonic(), cb, args))
+        if delay <= 0:
+            self.call_soon(cb, *args)
+        else:
+            heapq.heappush(
+                self._delayed_cb_heap,
+                (delay + time.monotonic(), self._sequence_order, cb, args),
+            )
+            self._sequence_order += 1
+
+    @staticmethod
+    def _compute_timeout(deadline: float):
+        return deadline - time.monotonic()
 
     def run_forever(self):
         if self._running:
@@ -29,23 +35,23 @@ class EventLoop:
         self._running = True
 
         try:
-            while (self._ready_queue or self._ready_heap) and self._running:
+            while (self._ready_queue or self._delayed_cb_heap) and self._running:
+                timeout = 0
+                if self._delayed_cb_heap:
+                    deadline, _, cb, args = self._delayed_cb_heap[0]
+                    timeout = self._compute_timeout(deadline)
+                    if timeout <= 0:
+                        heapq.heappop(self._delayed_cb_heap)
+                        self.call_soon(cb, *args)
+
                 if self._ready_queue:
                     cb, args = self._ready_queue.popleft()
                     try:
                         cb(*args)
                     except Exception as e:
                         traceback.print_exception(e)
-
-                if self._ready_heap:
-                    deadline, cb, args = self._ready_heap[0]
-                    if time.monotonic() >= deadline:
-                        heapq.heappop(self._ready_heap)
-                        try:
-                            cb(*args)
-                        except Exception as e:
-                            traceback.print_exception(e)
-
+                else:
+                    time.sleep(timeout)
         finally:
             self._running = False
 

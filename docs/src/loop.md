@@ -32,7 +32,7 @@ Read these for inspiration; do not copy them. The listed entry points are the be
 
 - [x] [Stage 0: Setup](#stage-0-setup)
 - [x] [Stage 1: A bare loop with `call_soon`](#stage-1-a-bare-loop-with-call_soon)
-- [ ] [Stage 2: Timers (`call_later`)](#stage-2-timers-call_later)
+- [x] [Stage 2: Timers (`call_later`)](#stage-2-timers-call_later)
 - [ ] [Stage 3: Readiness polling with `selectors`](#stage-3-readiness-polling-with-selectors)
 - [ ] [Stage 4: The complete loop tick](#stage-4-the-complete-loop-tick)
 - [ ] [Stage 5: Generators as coroutines](#stage-5-generators-as-coroutines)
