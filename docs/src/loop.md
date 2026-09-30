@@ -78,7 +78,8 @@ Read these for inspiration; do not copy them. The listed entry points are the be
 
 ### References
 
-- [uv docs](https://docs.astral.sh/uv/) · [pytest docs](https://docs.pytest.org/en/stable/)
+- [uv docs](https://docs.astral.sh/uv/)
+- [pytest docs](https://docs.pytest.org/en/stable/)
 
 ### Done when
 
@@ -119,7 +120,8 @@ Read these for inspiration; do not copy them. The listed entry points are the be
 
 ### References
 
-- [30-line asyncio loop](https://dev.to/ritesh_fcb86fb4b3890c81e4/build-a-working-asyncio-event-loop-in-30-lines-of-plain-python-5gjb) · CPython `base_events.py`
+- [30-line asyncio loop](https://dev.to/ritesh_fcb86fb4b3890c81e4/build-a-working-asyncio-event-loop-in-30-lines-of-plain-python-5gjb)
+- CPython `base_events.py`
 
 ### Done when
 
@@ -161,7 +163,8 @@ Read these for inspiration; do not copy them. The listed entry points are the be
 
 ### References
 
-- [Build your own Event Loop](https://techtalk.digitalpress.blog/build-your-own-event-loop-in-python/) · [PEP 418](https://peps.python.org/pep-0418/)
+- [Build your own Event Loop](https://techtalk.digitalpress.blog/build-your-own-event-loop-in-python/)
+- [PEP 418](https://peps.python.org/pep-0418/)
 
 ### Done when
 
@@ -203,7 +206,8 @@ Read these for inspiration; do not copy them. The listed entry points are the be
 
 ### References
 
-- [selectors docs](https://docs.python.org/3/library/selectors.html) · [Demystifying AsyncIO](https://slides.com/art049/demystifying-asyncio)
+- [selectors docs](https://docs.python.org/3/library/selectors.html)
+- [Demystifying AsyncIO](https://slides.com/art049/demystifying-asyncio)
 
 ### Done when
 
@@ -245,7 +249,9 @@ Read these for inspiration; do not copy them. The listed entry points are the be
 
 ### References
 
-- CPython `base_events.py` (`_run_once`) · [Redis `ae.c`](https://github.com/redis/redis/blob/unstable/src/ae.c) · [libuv core.c](https://github.com/libuv/libuv/blob/v1.x/src/unix/core.c)
+- CPython `base_events.py` (`_run_once`)
+- [Redis `ae.c`](https://github.com/redis/redis/blob/unstable/src/ae.c)
+- [libuv core.c](https://github.com/libuv/libuv/blob/v1.x/src/unix/core.c)
 
 ### Done when
 
@@ -286,7 +292,8 @@ Read these for inspiration; do not copy them. The listed entry points are the be
 
 ### References
 
-- [30-line loop](https://dev.to/ritesh_fcb86fb4b3890c81e4/build-a-working-asyncio-event-loop-in-30-lines-of-plain-python-5gjb) · [Recreating asyncio](https://jacobpadilla.com/writing/recreating-asyncio)
+- [30-line loop](https://dev.to/ritesh_fcb86fb4b3890c81e4/build-a-working-asyncio-event-loop-in-30-lines-of-plain-python-5gjb)
+- [Recreating asyncio](https://jacobpadilla.com/writing/recreating-asyncio)
 
 ### Done when
 
@@ -324,7 +331,8 @@ Read these for inspiration; do not copy them. The listed entry points are the be
 
 ### References
 
-- [PEP 380](https://peps.python.org/pep-0380/) · [Custom Event Loop guide](https://www.codingpancake.com/2026/07/how-to-implement-custom-event-loop-in.html)
+- [PEP 380](https://peps.python.org/pep-0380/)
+- [Custom Event Loop guide](https://www.codingpancake.com/2026/07/how-to-implement-custom-event-loop-in.html)
 
 ### Done when
 
@@ -381,7 +389,8 @@ def sleep(self, delay, result=None) -> Future: ...
 
 ### References
 
-- CPython `futures.py` and `tasks.py` · [Asyncio Demystified](https://dev.indooroutdoor.io/asyncio-demystified-rebuilding-it-from-scratch-one-yield-at-a-time)
+- CPython `futures.py` and `tasks.py`
+- [Asyncio Demystified](https://dev.indooroutdoor.io/asyncio-demystified-rebuilding-it-from-scratch-one-yield-at-a-time)
 
 ### Done when
 
@@ -422,7 +431,8 @@ def sleep(self, delay, result=None) -> Future: ...
 
 ### References
 
-- [PEP 492](https://peps.python.org/pep-0492/) · [Recreating asyncio](https://jacobpadilla.com/writing/recreating-asyncio)
+- [PEP 492](https://peps.python.org/pep-0492/)
+- [Recreating asyncio](https://jacobpadilla.com/writing/recreating-asyncio)
 
 ### Done when
 
@@ -464,7 +474,8 @@ def sleep(self, delay, result=None) -> Future: ...
 
 ### References
 
-- CPython `tasks.py` (`gather`) · [Asyncio Demystified](https://dev.indooroutdoor.io/asyncio-demystified-rebuilding-it-from-scratch-one-yield-at-a-time)
+- CPython `tasks.py` (`gather`)
+- [Asyncio Demystified](https://dev.indooroutdoor.io/asyncio-demystified-rebuilding-it-from-scratch-one-yield-at-a-time)
 
 ### Done when
 
@@ -506,7 +517,8 @@ def sleep(self, delay, result=None) -> Future: ...
 
 ### References
 
-- CPython `selector_events.py` · [socket docs](https://docs.python.org/3/library/socket.html)
+- CPython `selector_events.py`
+- [socket docs](https://docs.python.org/3/library/socket.html)
 
 ### Done when
 
@@ -548,7 +560,8 @@ def sleep(self, delay, result=None) -> Future: ...
 
 ### References
 
-- [Single-threaded non-blocking server](https://prodsens.live/2025/05/12/building-your-own-web-server-part-4-single-threaded-non-blocking-server/) · [Asyncio Demystified](https://dev.indooroutdoor.io/asyncio-demystified-rebuilding-it-from-scratch-one-yield-at-a-time)
+- [Single-threaded non-blocking server](https://prodsens.live/2025/05/12/building-your-own-web-server-part-4-single-threaded-non-blocking-server/)
+- [Asyncio Demystified](https://dev.indooroutdoor.io/asyncio-demystified-rebuilding-it-from-scratch-one-yield-at-a-time)
 
 ### Done when
 
@@ -590,7 +603,9 @@ def sleep(self, delay, result=None) -> Future: ...
 
 ### References
 
-- CPython `tasks.py` · [PEP 492](https://peps.python.org/pep-0492/) · [Trio `_run.py`](https://github.com/python-trio/trio/blob/main/src/trio/_core/_run.py)
+- CPython `tasks.py`
+- [PEP 492](https://peps.python.org/pep-0492/)
+- [Trio `_run.py`](https://github.com/python-trio/trio/blob/main/src/trio/_core/_run.py)
 
 ### Done when
 
@@ -632,7 +647,8 @@ def sleep(self, delay, result=None) -> Future: ...
 
 ### References
 
-- CPython `base_events.py` and `events.py` · [asyncio event loop docs](https://docs.python.org/3/library/asyncio-eventloop.html)
+- CPython `base_events.py` and `events.py`
+- [asyncio event loop docs](https://docs.python.org/3/library/asyncio-eventloop.html)
 
 ### Done when
 
