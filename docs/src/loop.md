@@ -82,9 +82,9 @@ Read these for inspiration; do not copy them. The listed entry points are the be
 
 ### Done when
 
-- [ ] `uv run pytest` exits 0 with the smoke test.
-- [ ] `uv run main.py` runs.
-- [ ] The package skeleton matches the layout above.
+- [x] `uv run pytest` exits 0 with the smoke test.
+- [x] `uv run main.py` runs.
+- [x] The package skeleton matches the layout above.
 
 ## Stage 1: A bare loop with `call_soon`
 
@@ -123,8 +123,8 @@ Read these for inspiration; do not copy them. The listed entry points are the be
 
 ### Done when
 
-- [ ] Callbacks run in order, the loop exits when idle, `stop()` halts it, and callback errors stay contained.
-- [ ] `run_forever` returns immediately when nothing is scheduled.
+- [x] Callbacks run in order, the loop exits when idle, `stop()` halts it, and callback errors stay contained.
+- [x] `run_forever` returns immediately when nothing is scheduled.
 
 ## Stage 2: Timers (`call_later`)
 
@@ -165,9 +165,9 @@ Read these for inspiration; do not copy them. The listed entry points are the be
 
 ### Done when
 
-- [ ] Timers fire in deadline order, wall time is about the maximum delay, and `call_later(0)` fires on the next tick.
-- [ ] The loop exits when both the ready queue and the timer heap are empty.
-- [ ] The loop does not hot-spin while waiting.
+- [x] Timers fire in deadline order, wall time is about the maximum delay, and `call_later(0)` fires on the next tick.
+- [x] The loop exits when both the ready queue and the timer heap are empty.
+- [x] The loop does not hot-spin while waiting.
 
 ## Stage 3: Readiness polling with `selectors`
 
