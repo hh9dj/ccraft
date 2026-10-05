@@ -22,9 +22,9 @@ Next, make file descriptors an event source so the loop reacts to I/O readiness 
 
 ## Tests
 
-- [ ] A pipe write fires the reader callback with the correct bytes, and `remove_reader` stops it.
-- [ ] With zero file descriptors, zero timers, and an empty queue, the loop exits instead of hanging.
-- [ ] A reader and a writer on the same file descriptor coexist.
+- [x] A pipe write fires the reader callback with the correct bytes, and `remove_reader` stops it.
+- [x] With zero file descriptors, zero timers, and an empty queue, the loop exits instead of hanging.
+- [x] A reader and a writer on the same file descriptor coexist.
 
 ## Hints
 
