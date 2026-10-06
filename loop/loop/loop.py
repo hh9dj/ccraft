@@ -1,7 +1,5 @@
 import collections
-import errno
 import heapq
-import os
 import time
 import traceback
 from selectors import EVENT_READ, EVENT_WRITE, DefaultSelector
@@ -29,9 +27,11 @@ class EventLoop:
             )
             self._sequence_order += 1
 
-    @staticmethod
-    def _compute_timeout(deadline: float):
-        return max(deadline - time.monotonic(), 0)
+    def _compute_timeout(self, deadline: float) -> float | None:
+        timeout = max(deadline - time.monotonic(), 0)
+        if timeout == 0 and self._selector.get_map():
+            timeout = None
+        return timeout
 
     def add_reader(self, file_descriptor: int, cb, *args):
         self._add_event(file_descriptor, EVENT_READ, cb, args)
@@ -86,7 +86,7 @@ class EventLoop:
                 if self._delayed_cb_heap:
                     deadline, _, cb, args = self._delayed_cb_heap[0]
                     timeout = self._compute_timeout(deadline)
-                    if timeout <= 0:
+                    if not timeout:
                         heapq.heappop(self._delayed_cb_heap)
                         self.call_soon(cb, *args)
 
@@ -97,9 +97,9 @@ class EventLoop:
                     except Exception as e:
                         traceback.print_exception(e)
 
-                if timeout == 0 and self._selector.get_map():
-                    timeout = None
-
+                # timeout=0 return immediatly when other queues are waiting and no fd are registered
+                # timeout=None when the others queues are empty and fds are registered (blocks)
+                # timeout>0 when the others queues are empty and fds are registered (blocks until timeout)
                 for key, events in self._selector.select(timeout=timeout):
                     if events & EVENT_READ and key.data[EVENT_READ]:
                         cb, args = key.data[EVENT_READ]
