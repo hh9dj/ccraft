@@ -1,1 +1,1 @@
-from loop.loop import EventLoop
+from loop.loop import EventLoop as EventLoop

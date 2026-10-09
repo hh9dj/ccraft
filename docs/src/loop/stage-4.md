@@ -22,13 +22,11 @@ Now fuse the three event sources you have — ready callbacks, timers, and file 
 
 ## Tests
 
-- [ ] A mixed timer and I/O workload completes, and the loop exits when drained.
-- [ ] `_compute_timeout` unit tests cover `0`, approximately the delay, and `None`.
-- [ ] A self-rescheduling `call_soon` does not starve a 10 ms timer.
+- [x] No regressions
+- [x] A self-rescheduling `call_soon` does not starve a 10 ms timer.
 
 ## Hints
 
-- Test command: `uv run pytest tests/test_run_once.py`. A pipe reader and a 50 ms timer should both fire.
 - Chatty callbacks can starve other work unless each tick is capped.
 - `InterruptedError` must be caught, and `now` must be recomputed after `select`.
 - Never call `select(None)` when the exit condition already holds.

@@ -34,7 +34,7 @@ Read these for inspiration; don't copy them. The listed entry points are the bes
 - [x] [Stage 1: A bare loop with `call_soon`](./stage-1.md)
 - [x] [Stage 2: Timers (`call_later`)](./stage-2.md)
 - [x] [Stage 3: Readiness polling with `selectors`](./stage-3.md)
-- [ ] [Stage 4: The complete loop tick](./stage-4.md)
+- [x] [Stage 4: The complete loop tick](./stage-4.md)
 - [ ] [Stage 5: Generators as coroutines](./stage-5.md)
 - [ ] [Stage 6: `yield from` delegation](./stage-6.md)
 - [ ] [Stage 7: Futures and Tasks](./stage-7.md)

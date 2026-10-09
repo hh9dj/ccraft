@@ -22,16 +22,16 @@ def test_absorb_exceptions(event_loop: EventLoop):
 def test_no_hot_spin(event_loop: EventLoop):
     """Waiting for a timer blocks (low CPU) instead of hot-spinning."""
     result = []
-    start = time.monotonic()
+    t = time.monotonic()
     start_cpu = time.process_time()
     event_loop.call_later(0.1, lambda x: result.append(x), 1)
     event_loop.call_later(0.2, lambda x: result.append(x), 2)
     event_loop.call_later(0.3, lambda x: result.append(x), 3)
     event_loop.run_forever()
 
-    elapsed = time.monotonic() - start
+    dt = time.monotonic() - t
     elapsed_cpu = time.process_time() - start_cpu
-    assert elapsed_cpu <= elapsed / 2
+    assert elapsed_cpu <= dt / 2
 
     assert result == [1, 2, 3]
 
@@ -39,15 +39,15 @@ def test_no_hot_spin(event_loop: EventLoop):
 def test_max_delay(event_loop: EventLoop):
     """Timers at 0.1/0.2/0.3 s finish in about the max delay, not the sum."""
     result = []
-    start = time.monotonic()
+    t = time.monotonic()
     event_loop.call_later(0.1, lambda x: result.append(x), 1)
     event_loop.call_later(0.2, lambda x: result.append(x), 2)
     event_loop.call_later(0.3, lambda x: result.append(x), 3)
     event_loop.run_forever()
 
-    elapsed = time.monotonic() - start
-    assert elapsed <= 0.5
-    assert elapsed >= 0.3
+    dt = time.monotonic() - t
+    assert dt <= 0.5
+    assert dt >= 0.3
 
     assert result == [1, 2, 3]
 
@@ -55,15 +55,15 @@ def test_max_delay(event_loop: EventLoop):
 def test_negative_delay(event_loop: EventLoop):
     """Negative delays are clamped and fire immediately, in scheduling order."""
     result = []
-    start = time.monotonic()
+    t = time.monotonic()
 
     event_loop.call_later(-2, lambda x: result.append(x), 1)
     event_loop.call_later(-2, lambda x: result.append(x), 2)
     event_loop.call_later(-2, lambda x: result.append(x), 3)
     event_loop.run_forever()
 
-    elapsed = time.monotonic() - start
-    assert elapsed <= 0.2
+    dt = time.monotonic() - t
+    assert dt <= 0.2
 
     assert result == [1, 2, 3]
 
@@ -89,11 +89,11 @@ def test_ready_work_not_delayed(event_loop: EventLoop):
     event_loop.call_later(0.3, lambda _: executed_later.append(time.monotonic()), None)
     event_loop.call_soon(lambda _: executed_soon.append(time.monotonic()), None)
 
-    start = time.monotonic()
+    t = time.monotonic()
     event_loop.run_forever()
 
-    for t in executed_soon:
-        assert t <= start + 0.05
+    for dt in executed_soon:
+        assert dt <= t + 0.05
 
     assert len(executed_soon) == 2
     assert len(executed_later) == 2
@@ -110,3 +110,34 @@ def test_execution_order(event_loop: EventLoop):
 
     event_loop.run_forever()
     assert result == [0, 1, 2, 3, 4]
+
+
+def test_starvation(event_loop: EventLoop):
+    dt = 0
+
+    def chatty():
+        event_loop.call_soon(chatty)
+
+    def time_dt():
+        nonlocal dt
+        dt = time.monotonic() - t
+
+    t = time.monotonic()
+    event_loop.call_soon(chatty)
+    event_loop.call_later(0.2, time_dt)
+    event_loop.call_later(0.3, event_loop.stop)
+    event_loop.run_forever()
+
+    assert dt <= 0.21
+    assert dt >= 0.2
+
+
+def test_timeout_aprox(event_loop: EventLoop):
+
+    t = time.monotonic()
+    event_loop.call_later(0.2, lambda _: None, None)
+    event_loop.run_forever()
+    dt = time.monotonic() - t
+
+    assert dt <= 0.3
+    assert dt >= 0.2
