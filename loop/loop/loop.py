@@ -78,26 +78,21 @@ class EventLoop:
             self._selector.unregister(fileobj=file_descriptor)
 
     def _run_once(self):
-        # 1. exit guard: nothing to loop for
+        # exit guard
         if not (self._ready_cb or self._scheduled_cb or self._selector.get_map()):
             self._running = False
             return
 
-        # 2. compute the block timeout:
         timeout = self._compute_timeout()
 
-        # 3. wait for I/O readiness; a signal aborts the tick, the next one recomputes
         try:
             io_event_list = self._selector.select(timeout=timeout)
         except InterruptedError:
             # when the process is waken up by a signal we end the tick
             return
-
-        # 4. promote ready fds into the ready queue
         for e in io_event_list:
             self._handle_event(e)
 
-        # 5. promote timers that expired, now recomputed after the wait
         now = time.monotonic()
         while self._scheduled_cb:
             next_scheduled_at = self._scheduled_cb[0][0]
@@ -107,7 +102,7 @@ class EventLoop:
             else:
                 break
 
-        # 6. run ready callbacks up to a per-tick limit
+        # run ready callbacks
         ntodo = min(len(self._ready_cb), self.max_ntodo_per_iter)
         for _ in range(ntodo):
             if not self._running:
