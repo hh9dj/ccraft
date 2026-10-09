@@ -2,34 +2,34 @@ import collections
 import heapq
 import time
 import traceback
-from selectors import EVENT_READ, EVENT_WRITE, DefaultSelector
+from selectors import EVENT_READ, EVENT_WRITE, DefaultSelector, SelectorKey
 from typing import Any
+
+MAX_NTODO_PER_ITER = 8
 
 
 class EventLoop:
-    def __init__(self) -> None:
-        self._ready_queue = collections.deque()
+    def __init__(self, n: int = MAX_NTODO_PER_ITER) -> None:
+        self._ready_cb = collections.deque()
         self._selector = DefaultSelector()
-        self._delayed_cb_heap = []
+        self._scheduled_cb = []
         self._running = False
         self._sequence_order = 0
+        self.max_ntodo_per_iter = n
 
     def call_soon(self, cb, *args):
-        self._ready_queue.append((cb, args))
+        self._ready_cb.append((cb, args))
 
     def call_later(self, delay: float, cb, *args):
-        if delay <= 0:
-            self.call_soon(cb, *args)
-        else:
-            heapq.heappush(
-                self._delayed_cb_heap,
-                (delay + time.monotonic(), self._sequence_order, cb, args),
-            )
-            self._sequence_order += 1
+        heapq.heappush(
+            self._scheduled_cb,
+            (delay + time.monotonic(), self._sequence_order, cb, args),
+        )
+        self._sequence_order += 1
 
     def _compute_timeout(self, deadline: float) -> float | None:
         timeout = max(deadline - time.monotonic(), 0)
-        if timeout == 0 and self._selector.get_map():
+        if timeout == 0 and not self._ready_cb and self._selector.get_map():
             timeout = None
         return timeout
 
@@ -73,6 +73,58 @@ class EventLoop:
         else:
             self._selector.unregister(fileobj=file_descriptor)
 
+    def _run_once(self):
+        # 1. call ready callbacks up to a limite
+        ntodo = min(len(self._ready_cb), self.max_ntodo_per_iter)
+        for _ in range(ntodo):
+            cb, args = self._ready_cb.popleft()
+            try:
+                cb(*args)
+            except Exception as e:
+                traceback.print_exception(e)
+
+        # 2. schedule call_later callbacks
+        timeout = 0
+        while self._scheduled_cb:
+            deadline, _, cb, args = self._scheduled_cb[0]
+            timeout = self._compute_timeout(deadline)
+            # timeout > 0, break until next iteraction when a cb is ready
+            if timeout:
+                break
+            else:
+                heapq.heappop(self._scheduled_cb)
+                self.call_soon(cb, *args)
+
+        # 3. pool for IO using selectors
+        io_event_list = self._selector.select(timeout=timeout)
+        for e in io_event_list:
+            self._handle_event(e)
+
+        if not (self._ready_cb or self._scheduled_cb or self._selector.get_map()):
+            self._running = False
+
+    def _handle_event(self, event: tuple[SelectorKey, int]):
+        key, ready_event = event
+        if ready_event & EVENT_READ and key.data[EVENT_READ]:
+            cb, args = key.data[EVENT_READ]
+            self.call_soon(cb, *args)
+        if ready_event & EVENT_WRITE and key.data[EVENT_WRITE]:
+            cb, args = key.data[EVENT_WRITE]
+            self.call_soon(cb, *args)
+
+    def _run_forever(self):
+        if self._running:
+            raise RuntimeError("Loop already running")
+        self._running = True
+
+        try:
+            while True:
+                self._run_once()
+                if not self._running:
+                    break
+        finally:
+            self._running = False
+
     def run_forever(self):
         if self._running:
             raise RuntimeError("Loop already running")
@@ -80,18 +132,18 @@ class EventLoop:
 
         try:
             while (
-                self._selector.get_map() or self._ready_queue or self._delayed_cb_heap
+                self._selector.get_map() or self._ready_cb or self._scheduled_cb
             ) and self._running:
                 timeout = 0
-                if self._delayed_cb_heap:
-                    deadline, _, cb, args = self._delayed_cb_heap[0]
+                if self._scheduled_cb:
+                    deadline, _, cb, args = self._scheduled_cb[0]
                     timeout = self._compute_timeout(deadline)
                     if not timeout:
-                        heapq.heappop(self._delayed_cb_heap)
+                        heapq.heappop(self._scheduled_cb)
                         self.call_soon(cb, *args)
 
-                while self._ready_queue and self._running:
-                    cb, args = self._ready_queue.popleft()
+                while self._ready_cb and self._running:
+                    cb, args = self._ready_cb.popleft()
                     try:
                         cb(*args)
                     except Exception as e:
