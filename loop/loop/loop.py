@@ -27,11 +27,15 @@ class EventLoop:
         )
         self._sequence_order += 1
 
-    def _compute_timeout(self, deadline: float) -> float | None:
-        timeout = max(deadline - time.monotonic(), 0)
-        if timeout == 0 and not self._ready_cb and self._selector.get_map():
-            timeout = None
-        return timeout
+    def _compute_timeout(self) -> float | None:
+        if self._ready_cb:
+            return 0
+        if self._scheduled_cb:
+            next_scheduled_at = self._scheduled_cb[0][0]
+            return max(next_scheduled_at - time.monotonic(), 0)
+        if self._selector.get_map():
+            return None
+        return 0
 
     def add_reader(self, file_descriptor: int, cb, *args):
         self._add_event(file_descriptor, EVENT_READ, cb, args)
@@ -74,34 +78,45 @@ class EventLoop:
             self._selector.unregister(fileobj=file_descriptor)
 
     def _run_once(self):
-        # 1. call ready callbacks up to a limite
+        # 1. exit guard: nothing to loop for
+        if not (self._ready_cb or self._scheduled_cb or self._selector.get_map()):
+            self._running = False
+            return
+
+        # 2. compute the block timeout:
+        timeout = self._compute_timeout()
+
+        # 3. wait for I/O readiness; a signal aborts the tick, the next one recomputes
+        try:
+            io_event_list = self._selector.select(timeout=timeout)
+        except InterruptedError:
+            # when the process is waken up by a signal we end the tick
+            return
+
+        # 4. promote ready fds into the ready queue
+        for e in io_event_list:
+            self._handle_event(e)
+
+        # 5. promote timers that expired, now recomputed after the wait
+        now = time.monotonic()
+        while self._scheduled_cb:
+            next_scheduled_at = self._scheduled_cb[0][0]
+            if next_scheduled_at <= now:
+                _, _, cb, args = heapq.heappop(self._scheduled_cb)
+                self.call_soon(cb, *args)
+            else:
+                break
+
+        # 6. run ready callbacks up to a per-tick limit
         ntodo = min(len(self._ready_cb), self.max_ntodo_per_iter)
         for _ in range(ntodo):
+            if not self._running:
+                return
             cb, args = self._ready_cb.popleft()
             try:
                 cb(*args)
             except Exception as e:
                 traceback.print_exception(e)
-
-        # 2. schedule call_later callbacks
-        timeout = 0
-        while self._scheduled_cb:
-            deadline, _, cb, args = self._scheduled_cb[0]
-            timeout = self._compute_timeout(deadline)
-            # timeout > 0, break until next iteraction when a cb is ready
-            if timeout:
-                break
-            else:
-                heapq.heappop(self._scheduled_cb)
-                self.call_soon(cb, *args)
-
-        # 3. pool for IO using selectors
-        io_event_list = self._selector.select(timeout=timeout)
-        for e in io_event_list:
-            self._handle_event(e)
-
-        if not (self._ready_cb or self._scheduled_cb or self._selector.get_map()):
-            self._running = False
 
     def _handle_event(self, event: tuple[SelectorKey, int]):
         key, ready_event = event
@@ -112,7 +127,7 @@ class EventLoop:
             cb, args = key.data[EVENT_WRITE]
             self.call_soon(cb, *args)
 
-    def _run_forever(self):
+    def run_forever(self):
         if self._running:
             raise RuntimeError("Loop already running")
         self._running = True
@@ -122,43 +137,6 @@ class EventLoop:
                 self._run_once()
                 if not self._running:
                     break
-        finally:
-            self._running = False
-
-    def run_forever(self):
-        if self._running:
-            raise RuntimeError("Loop already running")
-        self._running = True
-
-        try:
-            while (
-                self._selector.get_map() or self._ready_cb or self._scheduled_cb
-            ) and self._running:
-                timeout = 0
-                if self._scheduled_cb:
-                    deadline, _, cb, args = self._scheduled_cb[0]
-                    timeout = self._compute_timeout(deadline)
-                    if not timeout:
-                        heapq.heappop(self._scheduled_cb)
-                        self.call_soon(cb, *args)
-
-                while self._ready_cb and self._running:
-                    cb, args = self._ready_cb.popleft()
-                    try:
-                        cb(*args)
-                    except Exception as e:
-                        traceback.print_exception(e)
-
-                # timeout=0 return immediatly when other queues are waiting and no fd are registered
-                # timeout=None when the others queues are empty and fds are registered (blocks)
-                # timeout>0 when the others queues are empty and fds are registered (blocks until timeout)
-                for key, events in self._selector.select(timeout=timeout):
-                    if events & EVENT_READ and key.data[EVENT_READ]:
-                        cb, args = key.data[EVENT_READ]
-                        self.call_soon(cb, *args)
-                    if events & EVENT_WRITE and key.data[EVENT_WRITE]:
-                        cb, args = key.data[EVENT_WRITE]
-                        self.call_soon(cb, *args)
         finally:
             self._running = False
 
